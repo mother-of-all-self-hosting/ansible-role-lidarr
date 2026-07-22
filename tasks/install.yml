@@ -1,0 +1,88 @@
+# SPDX-FileCopyrightText: 2023-2025 Slavi Pantaleev
+# SPDX-FileCopyrightText: 2025 spatterlight
+# SPDX-FileCopyrightText: 2025, 2026 Suguru Hirahara
+# SPDX-FileCopyrightText: 2026 sudo-Tiz
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+---
+- name: Ensure Lidarr paths exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0750"
+    owner: "{{ lidarr_uid }}"
+    group: "{{ lidarr_gid }}"
+  with_items:
+    - "{{ lidarr_base_path }}"
+    - "{{ lidarr_data_path }}"
+
+- name: Ensure Lidarr support files installed
+  ansible.builtin.template:
+    src: "{{ role_path }}/templates/{{ item }}.j2"
+    dest: "{{ lidarr_base_path }}/{{ item }}"
+    mode: "0640"
+    owner: "{{ lidarr_uid }}"
+    group: "{{ lidarr_gid }}"
+  with_items:
+    - env
+    - labels
+  register: lidarr_support_files_result
+
+- name: Ensure Lidarr container image is pulled via community.docker.docker_image_pull
+  when: devture_systemd_docker_base_container_image_pull_method == 'ansible-module'
+  community.docker.docker_image_pull:
+    name: "{{ lidarr_container_image }}"
+    pull: always
+  register: lidarr_container_image_pull_result_ansible_module
+  retries: "{{ devture_playbook_help_container_retries_count }}"
+  delay: "{{ devture_playbook_help_container_retries_delay }}"
+  until: lidarr_container_image_pull_result_ansible_module is not failed
+
+- name: Ensure Lidarr container image is pulled via ansible.builtin.command
+  when: devture_systemd_docker_base_container_image_pull_method == 'command'
+  ansible.builtin.command:
+    cmd: "{{ devture_systemd_docker_base_host_command_docker }} pull {{ lidarr_container_image }}"
+  register: lidarr_container_image_pull_result_command
+  retries: "{{ devture_playbook_help_container_retries_count }}"
+  delay: "{{ devture_playbook_help_container_retries_delay }}"
+  until: lidarr_container_image_pull_result_command is not failed
+  changed_when: "'Downloaded newer image' in lidarr_container_image_pull_result_command.stdout"
+
+- name: Ensure Lidarr container network is created via community.docker.docker_network
+  when: devture_systemd_docker_base_container_network_creation_method == 'ansible-module'
+  community.docker.docker_network:
+    enable_ipv6: "{{ devture_systemd_docker_base_ipv6_enabled }}"
+    name: "{{ lidarr_container_network }}"
+    driver: bridge
+    driver_options: "{{ devture_systemd_docker_base_container_networks_driver_options }}"
+  register: lidarr_network_creation_result
+
+- name: Ensure Lidarr container network is created via ansible.builtin.command
+  when: devture_systemd_docker_base_container_network_creation_method == 'command'
+  ansible.builtin.command:
+    cmd: >-
+      {{ devture_systemd_docker_base_host_command_docker }} network create
+      {% if devture_systemd_docker_base_ipv6_enabled %}--ipv6{% endif %}
+      {{ devture_systemd_docker_base_container_networks_driver_options_string }}
+      {{ lidarr_container_network }}
+  register: lidarr_network_creation_result
+  changed_when: lidarr_network_creation_result.rc == 0
+  failed_when: lidarr_network_creation_result.rc != 0 and 'already exists' not in lidarr_network_creation_result.stderr
+
+- name: Ensure Lidarr systemd service is present
+  ansible.builtin.template:
+    src: "{{ role_path }}/templates/systemd/lidarr.service.j2"
+    dest: "{{ devture_systemd_docker_base_systemd_path }}/{{ lidarr_identifier }}.service"
+    mode: "0644"
+  register: lidarr_systemd_service_result
+
+- name: Determine whether Lidarr needs a restart
+  ansible.builtin.set_fact:
+    lidarr_restart_necessary: >-
+      {{
+        lidarr_support_files_result.changed | default(false)
+        or lidarr_systemd_service_result.changed | default(false)
+        or lidarr_container_image_pull_result_ansible_module.changed | default(false)
+        or lidarr_container_image_pull_result_command.changed | default(false)
+      }}

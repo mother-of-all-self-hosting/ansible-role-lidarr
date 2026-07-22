@@ -1,0 +1,29 @@
+# SPDX-FileCopyrightText: 2023 Slavi Pantaleev
+# SPDX-FileCopyrightText: 2025 spatterlight
+# SPDX-FileCopyrightText: 2025, 2026 Suguru Hirahara
+# SPDX-FileCopyrightText: 2026 sudo-Tiz
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+---
+- name: Perform Lidarr installation tasks
+  when: lidarr_enabled | bool
+  tags:
+    - setup-all
+    - setup-lidarr
+    - install-all
+    - install-lidarr
+  block:
+    - name: Validate Lidarr configuration
+      ansible.builtin.include_tasks: "{{ role_path }}/tasks/validate_config.yml"
+    - name: Install Lidarr
+      ansible.builtin.include_tasks: "{{ role_path }}/tasks/install.yml"
+
+- name: Perform Lidarr uninstallation tasks
+  when: not lidarr_enabled | bool
+  tags:
+    - setup-all
+    - setup-lidarr
+  block:
+    - name: Uninstall Lidarr
+      ansible.builtin.include_tasks: "{{ role_path }}/tasks/uninstall.yml"

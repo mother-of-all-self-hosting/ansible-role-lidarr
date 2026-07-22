@@ -1,0 +1,22 @@
+---
+galaxy_info:
+  author: sudo-tiz
+  company: mash
+  role_name: lidarr
+  namespace: mash
+  description: An Ansible role for installing Lidarr, a music collection manager for downloading and organizing music
+  platforms:
+    - name: Debian
+      versions:
+        - all
+    - name: Ubuntu
+      versions:
+        - all
+    - name: ArchLinux
+      versions:
+        - all
+    - name: EL
+      versions:
+        - all
+  license: AGPL-3.0-or-later
+  min_ansible_version: "2.1"
