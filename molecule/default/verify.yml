@@ -1,0 +1,53 @@
+# SPDX-FileCopyrightText: 2026 Suguru Hirahara
+# SPDX-FileCopyrightText: 2026 spatterlight
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+---
+- name: Verify Lidarr systemd service
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Wait for Lidarr service to become active (up to 180s)
+      ansible.builtin.systemd:
+        name: lidarr.service
+      register: lidarr_service
+      until: lidarr_service.status.ActiveState == 'active'
+      retries: 36
+      delay: 5
+
+    - name: Assert Lidarr service is active
+      ansible.builtin.assert:
+        that: lidarr_service.status.ActiveState == 'active'
+        fail_msg: "lidarr.service not active ({{ lidarr_service.status.ActiveState }})"
+        success_msg: "lidarr.service is active"
+
+    - name: Retrieve Lidarr service log for debugging
+      when: lidarr_debug_service_enabled | bool
+      ansible.builtin.command:
+        cmd: journalctl -xeu lidarr.service
+      changed_when: false
+
+    - name: Wait for Lidarr HTTP endpoint to respond (up to 10m)
+      ansible.builtin.uri:
+        url: "http://localhost:8686/"
+        method: GET
+        status_code: [200, 302]
+        follow_redirects: none
+      register: lidarr_endpoint
+      until: lidarr_endpoint.status in [200, 302]
+      retries: 120
+      delay: 5
+
+    - name: Assert Lidarr HTTP endpoint responds
+      ansible.builtin.assert:
+        that: lidarr_endpoint.status in [200, 302]
+        fail_msg: "Lidarr did not respond as expected ({{ lidarr_endpoint.status | default('no response') }})"
+        success_msg: "Lidarr responded with {{ lidarr_endpoint.status }}"
+
+    - name: Show Lidarr systemd service status summary
+      ansible.builtin.debug:
+        msg:
+          - "Lidarr systemd: {{ lidarr_service.status.ActiveState }}"
+          - "Lidarr HTTP: {{ lidarr_endpoint.status }}"
