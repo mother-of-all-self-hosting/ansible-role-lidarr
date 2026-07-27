@@ -10,7 +10,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 ---
-# Project source code URL: https://github.com/morpheus65535/lidarr
+# Project source code URL: https://github.com/linuxserver/docker-lidarr
 
 lidarr_enabled: true
 
@@ -18,8 +18,8 @@ lidarr_identifier: lidarr
 lidarr_base_path: "/{{ lidarr_identifier }}"
 lidarr_data_path: "{{ lidarr_base_path }}/data"
 
-# renovate: datasource=docker depName=lscr.io/linuxserver/lidarr
-lidarr_version: v1.5.6-ls342
+# renovate: datasource=docker depName=linuxserver/lidarr
+lidarr_version: 3.1.0.4875-ls36
 
 lidarr_uid: ""
 lidarr_gid: ""
@@ -52,7 +52,7 @@ lidarr_container_network_deletion_enabled: true
 lidarr_container_http_host_bind_port: ""
 
 # The port number in the container
-lidarr_container_http_port: 6767
+lidarr_container_http_port: 8686
 
 # A list of additional container networks that the container would be connected to.
 # The role does not create these networks, so make sure they already exist.
