@@ -56,6 +56,32 @@ lidarr_hostname: "example.com"
 
 After adjusting the hostname, make sure to adjust your DNS records to point the domain to your server.
 
+### Protecting the web interface
+
+> [!WARNING]
+> Lidarr ships without authentication and this role does not add any by default. A Lidarr installed as described above is reachable by anyone who knows the hostname, and it hands its API key to them: the unauthenticated `/initialize.json` endpoint contains it, and that key is enough to drive the whole API. Configure one of the two options below before pointing DNS at the server.
+
+The container image writes `<AuthenticationMethod>None</AuthenticationMethod>` into the configuration file Lidarr maintains for itself on first start, and Lidarr never asks you to create an account. Nothing in the installation process will warn you about this.
+
+The first option is to put HTTP Basic authentication in front of Lidarr, which is what the [Bazarr role](https://github.com/mother-of-all-self-hosting/ansible-role-bazarr) does by default. Add the following configuration to your `vars.yml` file, replacing the credentials with your own:
+
+```yaml
+lidarr_container_labels_traefik_middleware_basic_auth_enabled: true
+lidarr_container_labels_traefik_middleware_basic_auth_users: "user:$apr1$Ha9SbG5X$RTPTAKfKhx3F5FzFHwLKF."
+```
+
+The value is a `htpasswd`-formatted list of users, separated by commas. Generate one with `htpasswd -nb user password` (from the `apache2-utils` or `httpd-tools` package). If your `vars.yml` is processed by something that expands `$`, escape the dollar signs by doubling them.
+
+The second option is to switch on Lidarr's own login, which is the better choice if you also reach Lidarr from a mobile app that cannot send Basic credentials. Lidarr reads these from the environment, so pass them through `lidarr_environment_variables_additional_variables`:
+
+```yaml
+lidarr_environment_variables_additional_variables: |
+  LIDARR__AUTH__METHOD=Forms
+  LIDARR__AUTH__REQUIRED=Enabled
+```
+
+Set them **before** the first installation and create your account on the login screen Lidarr then serves. Turning them on for an installation that has no user account yet locks you out of the web interface, since there is no account to log in with; recover by removing the variables, re-running the playbook, and creating the account from Lidarr's own *Settings -> General -> Security* page instead.
+
 ### Extending the configuration
 
 There are some additional things you may wish to configure about the service.
@@ -63,6 +89,8 @@ There are some additional things you may wish to configure about the service.
 Take a look at:
 
 - [`defaults/main.yml`](../defaults/main.yml) for some variables that you can customize via your `vars.yml` file. You can override settings (even those that don't have dedicated playbook variables) using the `lidarr_environment_variables_additional_variables` variable
+
+Settings that Lidarr keeps in the configuration file it maintains for itself can be overridden through the environment, using `LIDARR__<SECTION>__<SETTING>` names — `LIDARR__SERVER__URLBASE`, `LIDARR__LOG__LEVEL` and so on. The role does this for the port already (`lidarr_container_http_port` is passed as `LIDARR__SERVER__PORT`), so `lidarr_container_http_port` really does move the port Lidarr listens on rather than only the port the reverse-proxy is told about.
 
 ## Installing
 

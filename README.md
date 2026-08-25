@@ -22,6 +22,9 @@ Check [defaults/main.yml](defaults/main.yml) for the full list of supported opti
 
 ## Limitations
 
+> [!WARNING]
+> Lidarr's web interface has no authentication of its own out of the box, and this role does not add any by default. Lidarr also serves its API key to unauthenticated callers on `/initialize.json`, and that key is enough to drive the whole API. Read [this section](docs/configuring-lidarr.md#protecting-the-web-interface) before exposing an installation.
+
 This role configures Lidarr with security in mind by doing the following:
 
 1. Running the container as a non-root user
