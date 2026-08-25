@@ -51,7 +51,16 @@ lidarr_container_network_deletion_enabled: true
 # Takes an "<ip>:<port>" or "<port>" value (e.g. "127.0.0.1:2586"), or empty string to not expose.
 lidarr_container_http_host_bind_port: ""
 
-# The port number in the container
+# The port number Lidarr listens on inside the container.
+#
+# Lidarr's own default is 8686, and it keeps the value in the configuration file it
+# maintains for itself under `lidarr_data_path`, which this role does not template.
+# The role passes this value to the container as `LIDARR__SERVER__PORT` (see
+# `../templates/env.j2`), which overrides that file, so changing this really does move
+# the port Lidarr listens on - and with it the published port and the Traefik label.
+#
+# To change the port Lidarr is reachable on from outside the container without moving
+# the port inside it, use `lidarr_container_http_host_bind_port` instead.
 lidarr_container_http_port: 8686
 
 # A list of additional container networks that the container would be connected to.
