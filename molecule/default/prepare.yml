@@ -1,3 +1,4 @@
+# SPDX-FileCopyrightText: 2026 Slavi Pantaleev
 # SPDX-FileCopyrightText: 2026 spatterlight
 # SPDX-FileCopyrightText: 2026 Suguru Hirahara
 #
@@ -20,6 +21,21 @@
         name:
           - python3-requests
         state: present
+
+    # Mounted into the container through `lidarr_container_additional_volumes_custom`.
+    # verify.yml reads the marker file back from inside the container, which only
+    # works if the systemd unit really carries the additional volumes.
+    - name: Ensure the additional volume directory exists for Lidarr Molecule tests
+      ansible.builtin.file:
+        path: "{{ lidarr_molecule_extra_volume_src }}"
+        state: directory
+        mode: "0755"
+
+    - name: Ensure the additional volume marker file exists for Lidarr Molecule tests
+      ansible.builtin.copy:
+        content: "{{ lidarr_molecule_extra_volume_marker }}\n"
+        dest: "{{ lidarr_molecule_extra_volume_src }}/marker.txt"
+        mode: "0644"
 
     - name: Ensure Docker is installed for Lidarr Molecule tests preparation
       ansible.builtin.include_role:

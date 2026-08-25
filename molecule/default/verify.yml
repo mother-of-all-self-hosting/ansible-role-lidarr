@@ -1,53 +1,437 @@
+# SPDX-FileCopyrightText: 2026 Slavi Pantaleev
 # SPDX-FileCopyrightText: 2026 spatterlight
 # SPDX-FileCopyrightText: 2026 Suguru Hirahara
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 ---
-- name: Verify Lidarr systemd service
+- name: Verify Lidarr
   hosts: all
   become: true
   gather_facts: false
+
+  vars:
+    # The role's identifier is also the directory it installs into. These are
+    # role defaults, but Jinja-derived ones, and a verify play cannot resolve
+    # those out of defaults/main.yml - so they are spelled out here.
+    lidarr_verify_identifier: lidarr
+    lidarr_verify_base_path: /lidarr
+    lidarr_verify_data_path: /lidarr/data
+
+    lidarr_verify_url: "http://127.0.0.1:{{ lidarr_container_http_port }}"
+    lidarr_verify_api_url: "http://127.0.0.1:{{ lidarr_container_http_port }}/api/v1"
+    lidarr_verify_headers:
+      X-Api-Key: "{{ lidarr_molecule_api_key }}"
+
+    # The name carries both the role and the scenario, like the platform does,
+    # so a leftover container can never be mistaken for another scenario's.
+    lidarr_verify_control_container: "{{ inventory_hostname }}-stock-control"
+
+    # The tag the round trip creates. Distinctive enough that finding it in
+    # Lidarr's database cannot be a coincidence.
+    lidarr_verify_tag_label: molecule-round-trip-tag
+
+    # Nobody ever creates this one. Asking for it proves the read-back is a
+    # search that discriminates, rather than a call returning whatever exists.
+    lidarr_verify_absent_tag_label: molecule-never-created-tag
+
   tasks:
-    - name: Wait for Lidarr service to become active (up to 180s)
-      ansible.builtin.systemd:
-        name: lidarr.service
+    # Role defaults are not in scope in a verify play, but the version Renovate
+    # bumps lives in them and is what the running container is checked against
+    # below. Only leaf literals may be read out of this - anything Jinja-derived
+    # would be resolved against an empty namespace.
+    - name: Load the Lidarr role defaults
+      ansible.builtin.include_vars:
+        file: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') }}/defaults/main.yml"
+        name: lidarr_defaults
+
+    - name: Read the Lidarr container the role created
+      ansible.builtin.command:
+        cmd: "docker inspect {{ lidarr_verify_identifier }}"
+      register: lidarr_container_raw
+      changed_when: false
+
+    - name: Make sense of the Lidarr container
+      ansible.builtin.set_fact:
+        lidarr_container: "{{ (lidarr_container_raw.stdout | from_json)[0] }}"
+
+    # ------------------------------------------------------------------
+    # The negative control, started first so that it boots alongside the
+    # assertions below rather than after them
+    # ------------------------------------------------------------------
+
+    # The same image, with none of the role's configuration. Anything this one
+    # can do unaided is worthless as evidence about the role, and it can do more
+    # than one would hope: it serves HTTP 200 on `/`, answers `/ping`, and hands
+    # its API key to anyone who asks for `/initialize.json`. An HTTP probe that
+    # only looks for a 200 therefore proves nothing at all, which is why every
+    # assertion below is about a value this container cannot produce.
+    - name: Remove any leftover stock Lidarr control container
+      ansible.builtin.command:
+        cmd: "docker rm -f {{ lidarr_verify_control_container }}"
+      changed_when: false
+      failed_when: false
+
+    - name: Run the Lidarr image with none of the role's configuration
+      ansible.builtin.command:
+        cmd: >-
+          docker run --detach --rm
+          --name {{ lidarr_verify_control_container }}
+          {{ lidarr_container.Config.Image }}
+      changed_when: true
+
+    # ------------------------------------------------------------------
+    # The service the role installed
+    # ------------------------------------------------------------------
+
+    - name: Wait for the Lidarr service to become active
+      ansible.builtin.systemd_service:
+        name: "{{ lidarr_verify_identifier }}.service"
       register: lidarr_service
       until: lidarr_service.status.ActiveState == 'active'
       retries: 36
       delay: 5
 
-    - name: Assert Lidarr service is active
+    # `Restart=always` makes this say `active` for a container that is
+    # crash-looping, so it is a precondition for the rest and not evidence.
+    - name: Assert the Lidarr service is active
       ansible.builtin.assert:
         that: lidarr_service.status.ActiveState == 'active'
-        fail_msg: "lidarr.service not active ({{ lidarr_service.status.ActiveState }})"
-        success_msg: "lidarr.service is active"
+        fail_msg: "{{ lidarr_verify_identifier }}.service is {{ lidarr_service.status.ActiveState }}"
+        success_msg: "{{ lidarr_verify_identifier }}.service is active"
 
-    - name: Retrieve Lidarr service log for debugging
+    - name: Retrieve the Lidarr service log for debugging
       when: lidarr_debug_service_enabled | bool
       ansible.builtin.command:
-        cmd: journalctl -xeu lidarr.service
+        cmd: "journalctl -xeu {{ lidarr_verify_identifier }}.service"
       changed_when: false
 
-    - name: Wait for Lidarr HTTP endpoint to respond (up to 10m)
+    # A published Docker port with nothing listening behind it resets the
+    # connection rather than refusing it, which `uri` reports as status -1, and
+    # the linuxserver.io image restarts Lidarr once while it sets itself up. The
+    # loop has to survive both, so failures are tolerated here and judged after.
+    - name: Wait for Lidarr to answer on the port the role configured
       ansible.builtin.uri:
-        url: "http://localhost:8686/"
+        url: "{{ lidarr_verify_url }}/ping"
         method: GET
-        status_code: [200, 302]
         follow_redirects: none
-      register: lidarr_endpoint
-      until: lidarr_endpoint.status in [200, 302]
+      register: lidarr_ping
+      until: lidarr_ping.status == 200
       retries: 120
       delay: 5
+      failed_when: false
 
-    - name: Assert Lidarr HTTP endpoint responds
+    - name: Assert Lidarr answers on the port the role configured
       ansible.builtin.assert:
-        that: lidarr_endpoint.status in [200, 302]
-        fail_msg: "Lidarr did not respond as expected ({{ lidarr_endpoint.status | default('no response') }})"
-        success_msg: "Lidarr responded with {{ lidarr_endpoint.status }}"
+        that:
+          - lidarr_ping.status == 200
+          - (lidarr_ping.json | default({})).get('status', '') == 'OK'
+        fail_msg: >-
+          Lidarr did not answer on {{ lidarr_verify_url }}/ping
+          (status {{ lidarr_ping.status | default('none') }})
+        success_msg: "Lidarr answers on {{ lidarr_verify_url }}/ping"
 
-    - name: Show Lidarr systemd service status summary
+    # ------------------------------------------------------------------
+    # Does the role's configuration reach the process?
+    # ------------------------------------------------------------------
+
+    # Lidarr keeps its port in the config.xml it maintains for itself under
+    # `lidarr_data_path`, which this role does not template. Only the
+    # `LIDARR__SERVER__PORT` the role renders into the env file can move it, so
+    # a Lidarr listening anywhere other than 8686 is the role's doing. The
+    # absence of 8686 matters as much as the presence of the configured port:
+    # were the override dropped, the published port and the Traefik label would
+    # still say 18686 while the process sat on 8686.
+    - name: Read the ports Lidarr listens on
+      ansible.builtin.command:
+        cmd: "docker exec {{ lidarr_verify_identifier }} netstat -lnt"
+      register: lidarr_listening_raw
+      changed_when: false
+
+    - name: Make sense of the ports Lidarr listens on
+      ansible.builtin.set_fact:
+        lidarr_listening_ports: "{{ lidarr_listening_raw.stdout | regex_findall(':([0-9]+)\\s') | unique }}"
+
+    - name: Assert Lidarr listens on the port the role configured and not on its own default
+      ansible.builtin.assert:
+        that:
+          - lidarr_container_http_port | string in lidarr_listening_ports
+          - "'8686' not in lidarr_listening_ports"
+        fail_msg: >-
+          Lidarr listens on {{ lidarr_listening_ports | join(', ') }}, not on the configured
+          {{ lidarr_container_http_port }}, so lidarr_container_http_port does not reach the process
+        success_msg: >-
+          Lidarr listens on {{ lidarr_container_http_port }} and not on its built-in 8686,
+          so lidarr_container_http_port reaches the process
+
+    # `lidarr_environment_variables_tz` is the only thing that can move the
+    # container's clock off UTC, and Pacific/Chatham's quarter-hour offset is
+    # shared with no other timezone.
+    - name: Read the timezone offset inside the Lidarr container
+      ansible.builtin.command:
+        cmd: "docker exec {{ lidarr_verify_identifier }} date +%z"
+      register: lidarr_timezone
+      changed_when: false
+
+    - name: Assert the Lidarr container runs in the configured timezone
+      ansible.builtin.assert:
+        # +12:45 in standard time, +13:45 in daylight saving time.
+        that: lidarr_timezone.stdout | trim in ['+1245', '+1345']
+        fail_msg: >-
+          The Lidarr container's clock is at {{ lidarr_timezone.stdout | trim }}, not at the
+          offset of {{ lidarr_environment_variables_tz }}, so lidarr_environment_variables_tz
+          does not reach the process
+        success_msg: >-
+          The Lidarr container's clock is at {{ lidarr_timezone.stdout | trim }},
+          the offset of {{ lidarr_environment_variables_tz }}
+
+    - name: Read the user Lidarr runs as
+      ansible.builtin.command:
+        cmd: "docker exec {{ lidarr_verify_identifier }} id -u"
+      register: lidarr_container_uid
+      changed_when: false
+
+    - name: Assert Lidarr runs as the configured user
+      ansible.builtin.assert:
+        that: lidarr_container_uid.stdout | trim | int == lidarr_uid | int
+        fail_msg: "Lidarr runs as uid {{ lidarr_container_uid.stdout | trim }}, not as {{ lidarr_uid }}"
+        success_msg: "Lidarr runs as uid {{ lidarr_uid }}"
+
+    # `lidarr_container_additional_volumes` has been declared but never rendered
+    # in other roles of this fleet. Reading the file back from inside the
+    # container is the difference between the variable existing and it working.
+    - name: Read the additional volume from inside the Lidarr container
+      ansible.builtin.command:
+        cmd: >-
+          docker exec {{ lidarr_verify_identifier }}
+          cat {{ lidarr_molecule_extra_volume_dst }}/marker.txt
+      register: lidarr_extra_volume
+      changed_when: false
+      failed_when: false
+
+    - name: Assert the additional volume is mounted into the Lidarr container
+      ansible.builtin.assert:
+        that:
+          - lidarr_extra_volume.rc == 0
+          - lidarr_extra_volume.stdout | trim == lidarr_molecule_extra_volume_marker
+        fail_msg: >-
+          {{ lidarr_molecule_extra_volume_dst }}/marker.txt does not hold
+          {{ lidarr_molecule_extra_volume_marker }}, so lidarr_container_additional_volumes
+          is declared but not rendered into the systemd unit
+        success_msg: >-
+          {{ lidarr_molecule_extra_volume_src }} is mounted at
+          {{ lidarr_molecule_extra_volume_dst }} inside the container
+
+    - name: Read the Lidarr container label file the role rendered
+      ansible.builtin.slurp:
+        src: "{{ lidarr_verify_base_path }}/labels"
+      register: lidarr_labels_file
+
+    # No Traefik runs here, so these labels are checked as text. The port in
+    # them is the one that matters: a Traefik routing to a port Lidarr is not
+    # listening on is exactly the failure the env file override prevents.
+    - name: Assert the Traefik labels agree with the port Lidarr listens on
+      ansible.builtin.assert:
+        that:
+          - lidarr_verify_expected_port_label in lidarr_labels_content
+          - lidarr_verify_expected_basic_auth_label in lidarr_labels_content
+        fail_msg: "The rendered label file does not route to {{ lidarr_container_http_port }}: {{ lidarr_labels_content }}"
+        success_msg: "The rendered label file routes to {{ lidarr_container_http_port }} behind the basic-auth middleware"
+      vars:
+        lidarr_labels_content: "{{ lidarr_labels_file.content | b64decode }}"
+        lidarr_verify_expected_port_label: >-
+          traefik.http.services.{{ lidarr_verify_identifier }}.loadbalancer.server.port={{ lidarr_container_http_port }}
+        lidarr_verify_expected_basic_auth_label: >-
+          traefik.http.middlewares.{{ lidarr_verify_identifier }}-basic-auth.basicauth.users={{
+          lidarr_container_labels_traefik_middleware_basic_auth_users }}
+
+    # ------------------------------------------------------------------
+    # The running version, which is what earns or denies automerge
+    # ------------------------------------------------------------------
+
+    - name: Read the Lidarr system status
+      ansible.builtin.uri:
+        url: "{{ lidarr_verify_api_url }}/system/status"
+        method: GET
+        headers: "{{ lidarr_verify_headers }}"
+        follow_redirects: none
+      register: lidarr_status
+      changed_when: false
+
+    # `packageVersion` is the full linuxserver.io tag, so this compares against
+    # the leaf literal in defaults/main.yml that Renovate edits, character for
+    # character. `version` is Lidarr's own four-component version, which is that
+    # same value with the rebuild counter removed.
+    - name: Assert the running Lidarr is the version the role pins
+      ansible.builtin.assert:
+        that:
+          - lidarr_status.json.packageVersion == lidarr_defaults.lidarr_version
+          - lidarr_status.json.version == lidarr_defaults.lidarr_version.split('-')[0]
+          - lidarr_container.Config.Labels['org.opencontainers.image.version'] == lidarr_defaults.lidarr_version
+        fail_msg: >-
+          The running Lidarr reports {{ lidarr_status.json.packageVersion }} while
+          defaults/main.yml pins {{ lidarr_defaults.lidarr_version }}
+        success_msg: >-
+          The running Lidarr reports {{ lidarr_status.json.packageVersion }},
+          the version defaults/main.yml pins
+
+    # The API key and the instance name both come from
+    # `lidarr_environment_variables_additional_variables`. Lidarr generates a
+    # random API key on first start and calls itself "Lidarr", so a status
+    # response that answered to the role's key and carries the role's instance
+    # name cannot have come from an unconfigured Lidarr.
+    - name: Assert the additional environment variables reached Lidarr
+      ansible.builtin.assert:
+        that:
+          - lidarr_status.status == 200
+          - lidarr_status.json.instanceName == lidarr_molecule_instance_name
+        fail_msg: >-
+          Lidarr calls itself {{ lidarr_status.json.instanceName | default('nothing') }} rather than
+          {{ lidarr_molecule_instance_name }}, so lidarr_environment_variables_additional_variables
+          does not reach the process
+        success_msg: "Lidarr answered the role's API key and calls itself {{ lidarr_molecule_instance_name }}"
+
+    # ------------------------------------------------------------------
+    # A round trip through the API and out the other side of the database
+    # ------------------------------------------------------------------
+
+    - name: Create a tag through the Lidarr API
+      ansible.builtin.uri:
+        url: "{{ lidarr_verify_api_url }}/tag"
+        method: POST
+        headers: "{{ lidarr_verify_headers }}"
+        body_format: json
+        body:
+          label: "{{ lidarr_verify_tag_label }}"
+        status_code: [201]
+        follow_redirects: none
+      changed_when: true
+
+    - name: Read the tags back through the Lidarr API
+      ansible.builtin.uri:
+        url: "{{ lidarr_verify_api_url }}/tag"
+        method: GET
+        headers: "{{ lidarr_verify_headers }}"
+        follow_redirects: none
+      register: lidarr_tags
+      changed_when: false
+
+    - name: Assert the Lidarr API returns the tag that was created and nothing else
+      ansible.builtin.assert:
+        that:
+          - lidarr_verify_tag_label in lidarr_tag_labels
+          - lidarr_verify_absent_tag_label not in lidarr_tag_labels
+        fail_msg: "The Lidarr API returned {{ lidarr_tag_labels | join(', ') }}"
+        success_msg: "The Lidarr API returned the tag that was created"
+      vars:
+        lidarr_tag_labels: "{{ lidarr_tags.json | map(attribute='label') | list }}"
+
+    # The API could be answering out of memory. Lidarr keeps its state in a
+    # SQLite database in the directory the role bind-mounts, so the row has to
+    # be there too, on the host side of the mount.
+    - name: Read the tags out of the Lidarr database
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - |
+            import json, sqlite3, sys
+            connection = sqlite3.connect(sys.argv[1])
+            print(json.dumps([row[0] for row in connection.execute('SELECT "Label" FROM "Tags"')]))
+          - "{{ lidarr_verify_data_path }}/lidarr.db"
+      register: lidarr_database_tags
+      changed_when: false
+
+    - name: Assert the tag reached the Lidarr database under the role's data path
+      ansible.builtin.assert:
+        that:
+          - lidarr_verify_tag_label in lidarr_database_labels
+          - lidarr_verify_absent_tag_label not in lidarr_database_labels
+        fail_msg: "{{ lidarr_verify_data_path }}/lidarr.db holds {{ lidarr_database_labels | join(', ') }}"
+        success_msg: >-
+          {{ lidarr_verify_data_path }}/lidarr.db holds the tag the API created,
+          so Lidarr's state lives where the role put it
+      vars:
+        lidarr_database_labels: "{{ lidarr_database_tags.stdout | from_json }}"
+
+    # ------------------------------------------------------------------
+    # What the negative control has to say
+    # ------------------------------------------------------------------
+
+    - name: Wait for the stock Lidarr control container to come up
+      ansible.builtin.command:
+        cmd: >-
+          docker exec {{ lidarr_verify_control_container }}
+          wget --quiet --output-document=- http://127.0.0.1:8686/initialize.json
+      register: lidarr_control_initialize
+      until: lidarr_control_initialize.rc == 0
+      retries: 60
+      delay: 5
+      changed_when: false
+      failed_when: false
+
+    - name: Assert the stock Lidarr image serves a different instance entirely
+      ansible.builtin.assert:
+        that:
+          # It comes up unaided, so "it responds" is not evidence about the role.
+          - lidarr_control_initialize.rc == 0
+          # It is a plain, unauthenticated Lidarr: it hands out its own API key.
+          - lidarr_control_json.apiKey | length > 0
+          # And that key is not the role's, so the status response above was
+          # answered by a Lidarr the role configured.
+          - lidarr_control_json.apiKey != lidarr_molecule_api_key
+          - lidarr_control_json.instanceName == 'Lidarr'
+        fail_msg: >-
+          The stock Lidarr image produced {{ lidarr_control_initialize.stdout | default('nothing') }},
+          which makes the assertions above unattributable to the role
+        success_msg: >-
+          The stock Lidarr image serves its own random API key and calls itself "Lidarr",
+          so the configured instance above is the role's doing
+      vars:
+        lidarr_control_json: "{{ lidarr_control_initialize.stdout | from_json }}"
+
+    - name: Offer the role's API key to the stock Lidarr control container
+      ansible.builtin.command:
+        cmd: >-
+          docker exec {{ lidarr_verify_control_container }}
+          wget --quiet --output-document=- --header=X-Api-Key:{{ lidarr_molecule_api_key }}
+          http://127.0.0.1:8686/api/v1/system/status
+      register: lidarr_control_status
+      changed_when: false
+      failed_when: false
+
+    - name: Read the ports the stock Lidarr control container listens on
+      ansible.builtin.command:
+        cmd: "docker exec {{ lidarr_verify_control_container }} netstat -lnt"
+      register: lidarr_control_listening
+      changed_when: false
+
+    - name: Assert the stock Lidarr image has neither the role's key nor the role's port
+      ansible.builtin.assert:
+        that:
+          - lidarr_control_status.rc != 0
+          - "'8686' in lidarr_control_ports"
+          - lidarr_container_http_port | string not in lidarr_control_ports
+        fail_msg: >-
+          The stock Lidarr image accepted the role's API key or listens on
+          {{ lidarr_container_http_port }} ({{ lidarr_control_ports | join(', ') }}),
+          so neither is evidence that the role configured anything
+        success_msg: >-
+          The stock Lidarr image rejects the role's API key and listens on its built-in 8686,
+          so both are the role's doing
+      vars:
+        lidarr_control_ports: "{{ lidarr_control_listening.stdout | regex_findall(':([0-9]+)\\s') | unique }}"
+
+    - name: Remove the stock Lidarr control container
+      ansible.builtin.command:
+        cmd: "docker rm -f {{ lidarr_verify_control_container }}"
+      changed_when: true
+
+    - name: Show what was verified about Lidarr
       ansible.builtin.debug:
         msg:
-          - "Lidarr systemd: {{ lidarr_service.status.ActiveState }}"
-          - "Lidarr HTTP: {{ lidarr_endpoint.status }}"
+          - "systemd: {{ lidarr_service.status.ActiveState }}"
+          - "version: {{ lidarr_status.json.packageVersion }} (pinned: {{ lidarr_defaults.lidarr_version }})"
+          - "listening on: {{ lidarr_listening_ports | join(', ') }} (configured: {{ lidarr_container_http_port }})"
+          - "instance name: {{ lidarr_status.json.instanceName }}"
+          - "database: {{ lidarr_status.json.databaseType }} at {{ lidarr_verify_data_path }}/lidarr.db"

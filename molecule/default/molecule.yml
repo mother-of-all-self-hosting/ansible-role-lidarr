@@ -1,3 +1,4 @@
+# SPDX-FileCopyrightText: 2026 Slavi Pantaleev
 # SPDX-FileCopyrightText: 2026 spatterlight
 # SPDX-FileCopyrightText: 2026 Suguru Hirahara
 #
@@ -31,13 +32,53 @@ provisioner:
         # Helper variables
         lidarr_debug_service_enabled: false
 
+        # The host directory mounted into the container through
+        # `lidarr_container_additional_volumes_custom`, and the file placed in
+        # it by prepare.yml. Reading that file from inside the container is what
+        # proves the additional volumes reach the systemd unit rather than being
+        # merely declared in defaults/main.yml.
+        lidarr_molecule_extra_volume_src: /lidarr-molecule-extra
+        lidarr_molecule_extra_volume_dst: /molecule-extra
+        lidarr_molecule_extra_volume_marker: lidarr-molecule-additional-volume-marker
+
+        # Nothing about Lidarr's own defaults can produce these. Lidarr's
+        # built-in port is 8686, its instance name is "Lidarr" and its API key is
+        # randomly generated on first start, so every one of them turning up as
+        # this file spells it is attributable to the role and to nothing else.
+        # See molecule/default/verify.yml.
+        lidarr_molecule_api_key: e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0
+        lidarr_molecule_instance_name: MoleculeLidarrInstance
+
         # Variables for Lidarr
         lidarr_uid: 1000
         lidarr_gid: 1000
         lidarr_scheme: http
         lidarr_hostname: localhost
-        lidarr_container_labels_traefik_enabled: false
-        lidarr_container_http_host_bind_port: 8686
+
+        # Deliberately not Lidarr's built-in 8686.
+        lidarr_container_http_port: 18686
+        lidarr_container_http_host_bind_port: "127.0.0.1:18686"
+
+        # Deliberately not UTC, and an offset no other timezone shares.
+        lidarr_environment_variables_tz: Pacific/Chatham
+
+        lidarr_environment_variables_additional_variables: |
+          LIDARR__AUTH__APIKEY={{ lidarr_molecule_api_key }}
+          LIDARR__APP__INSTANCENAME={{ lidarr_molecule_instance_name }}
+
+        lidarr_container_additional_volumes_custom:
+          - type: bind
+            src: "{{ lidarr_molecule_extra_volume_src }}"
+            dst: "{{ lidarr_molecule_extra_volume_dst }}"
+            options: readonly
+
+        # No Traefik runs here, but the labels the role renders are what a
+        # Traefik would route by, and the port in them has to agree with the
+        # port Lidarr was actually told to listen on.
+        # The doubled dollar signs are molecule's escape for a literal one.
+        lidarr_container_labels_traefik_enabled: true
+        lidarr_container_labels_traefik_middleware_basic_auth_enabled: true
+        lidarr_container_labels_traefik_middleware_basic_auth_users: "molecule:$$apr1$$Molecul3$$7HkL338hjk6Taj6WhjfbB1"
   env:
     # Workaround for https://github.com/ansible/molecule/issues/4391
     ANSIBLE_ROLES_PATH: ${MOLECULE_PROJECT_DIRECTORY}/..:/.ansible/roles:/usr/share/ansible/roles:/etc/ansible/roles:~/.ansible/roles

@@ -47,7 +47,24 @@ Currently there is one testing scenario available.
 
 ### `default`
 
-Tests a standard Lidarr installation.
+Installs Lidarr the way the role does and then checks that the installation is
+the role's doing rather than the image's.
+
+The scenario configures the role with values Lidarr cannot arrive at on its
+own (a port that is not Lidarr's built-in 8686, a timezone whose offset no
+other timezone shares, a fixed API key, an instance name, an additional bind
+mount) and asserts each of them on the running process. It then creates a tag over the
+authenticated API, reads it back, and cross-checks the row in the SQLite
+database under the role's data path, so the API cannot be answering out of
+memory. The version the running container reports is compared, character for
+character, against the `lidarr_version` leaf in `defaults/main.yml` that
+Renovate edits.
+
+Alongside it runs the same image with none of the role's configuration. That
+one serves HTTP 200 on `/`, answers `/ping` and hands out its API key at
+`/initialize.json` without being asked to, which is why none of those are used
+as evidence: the scenario asserts that the stock image rejects the role's API
+key and does not listen on the role's port.
 
 ## Running
 
