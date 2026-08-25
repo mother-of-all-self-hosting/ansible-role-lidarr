@@ -1,6 +1,20 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": [
+    "Renovate was structurally unable to propose any update for this role. `lidarr_version` pins a full linuxserver.io tag (`3.1.0.4875-ls36`) and the docker datasource defaults to `docker` versioning, whose compatibility check only accepts candidates whose dash-suffix is byte-identical to the current one. Of the 10936 tags `linuxserver/lidarr` publishes, exactly 9 carry the suffix `ls36`, and the pinned one is already the highest of them - so every LSIO rebuild mints `-ls37`, `-ls38`, `-ls39`, which Renovate reads as a different flavour and never offers. Measured against Renovate's own versioning modules rather than assumed: `docker` yields 0 candidates newer than the pin, and the role's git history agrees - `lidarr_version` has only ever been edited by hand, never by renovate[bot].",
+    "`loose` is not the fix. It happily parses the 193 bare-integer tags this repository also carries (`1` ... `196`) plus a stray `8.1.2135`, and would have offered `196` as the newest version. The packageRule below pins a regex versioning instead, which describes the tag shape exactly - `major.minor.patch.build-lsrevision` - and therefore both orders the LSIO rebuild counter numerically (ls9 < ls36 < ls39 < ls100) and rejects everything that is not a stable release build: the bare integers, `8.1.2135`, the three-component `3.1.0`, `latest`, and the `nightly-`, `develop-`, `version-`, `amd64-` and `arm64v8-` flavours. Re-measured through Renovate: 636 candidates accepted, 3 of them newer than the pin (`-ls37`, `-ls38`, `-ls39`), and `major`/`minor`/`patch` map onto Lidarr's own version components so the update class Renovate reports is honest.",
+    "Keeping the full four-component-plus-`ls` tag, rather than shortening the pin to the `3.1.0` tag that the sonarr and radarr roles use, is deliberate. `3.1.0` is republished on every LSIO rebuild while `3.1.0.4875-ls36` is not, and the role's install task pulls with `pull: always` - a short tag would hand operators builds nobody ever proposed. It also keeps the pin assertable: the running container reports `packageVersion: 3.1.0.4875-ls36` on `/api/v1/system/status` and carries the same string in `org.opencontainers.image.version`, both of which the Molecule scenario compares against this file.",
+    "patch-automerge is deliberately NOT extended. With the versioning below, an LSIO rebuild (`-ls36` -> `-ls39`, no upstream change at all) and a real Lidarr patch release (`3.1.0.4875` -> `3.1.4.5029`) are both classified `patch`, and Renovate offers no way to separate them. The second class is not safe to merge unattended: Lidarr migrates its SQLite database on startup, forward-only. Across the 3.1.x patch line alone, migrations 043, 046 and 081 were added (78 migration files at v3.1.0.4875, 80 at v3.1.2.4938, 81 at v3.1.4.5029), and 081 rewrites rows in `Albums` and `ArtistMetadata` in place. Not one of the 81 migrations implements `Down()`, so a bumped image an operator wants to roll back leaves a database the previous image cannot use. A fresh-install Molecule run structurally cannot see that risk, so these bumps stay human-reviewed pull requests."
+  ],
   "extends": [
     "github>mother-of-all-self-hosting/renovate-config#v1.0.0"
+  ],
+  "packageRules": [
+    {
+      "description": "linuxserver.io tags are `<lidarr version>-ls<rebuild counter>`. Default `docker` versioning treats the counter as an incompatible flavour and finds nothing to update; this regex makes the counter the least significant component instead, and filters out the nightly/develop/architecture/bare-integer tags the repository also publishes.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["linuxserver/lidarr"],
+      "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\\.(?<build>\\d+)-ls(?<revision>\\d+)$"
+    }
   ]
 }
