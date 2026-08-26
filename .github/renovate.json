@@ -7,7 +7,7 @@
     "patch-automerge is deliberately NOT extended. With the versioning below, an LSIO rebuild (`-ls36` -> `-ls39`, no upstream change at all) and a real Lidarr patch release (`3.1.0.4875` -> `3.1.4.5029`) are both classified `patch`, and Renovate offers no way to separate them. The second class is not safe to merge unattended: Lidarr migrates its SQLite database on startup, forward-only. Across the 3.1.x patch line alone, migrations 043, 046 and 081 were added (78 migration files at v3.1.0.4875, 80 at v3.1.2.4938, 81 at v3.1.4.5029), and 081 rewrites rows in `Albums` and `ArtistMetadata` in place. Not one of the 81 migrations implements `Down()`, so a bumped image an operator wants to roll back leaves a database the previous image cannot use. A fresh-install Molecule run structurally cannot see that risk, so these bumps stay human-reviewed pull requests."
   ],
   "extends": [
-    "github>mother-of-all-self-hosting/renovate-config#v1.0.0"
+    "github>mother-of-all-self-hosting/renovate-config#v1.1.0"
   ],
   "packageRules": [
     {
