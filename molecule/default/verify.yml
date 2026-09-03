@@ -427,11 +427,11 @@
         cmd: "docker rm -f {{ lidarr_verify_control_container }}"
       changed_when: true
 
-    - name: Show what was verified about Lidarr
+    - name: Show the Lidarr verification summary
       ansible.builtin.debug:
         msg:
-          - "systemd: {{ lidarr_service.status.ActiveState }}"
-          - "version: {{ lidarr_status.json.packageVersion }} (pinned: {{ lidarr_defaults.lidarr_version }})"
-          - "listening on: {{ lidarr_listening_ports | join(', ') }} (configured: {{ lidarr_container_http_port }})"
-          - "instance name: {{ lidarr_status.json.instanceName }}"
-          - "database: {{ lidarr_status.json.databaseType }} at {{ lidarr_verify_data_path }}/lidarr.db"
+          - "Lidarr systemd: {{ lidarr_service.status.ActiveState }}"
+          - "Lidarr version: {{ lidarr_status.json.packageVersion }} (pinned: {{ lidarr_defaults.lidarr_version }})"
+          - "Lidarr listening on: {{ lidarr_listening_ports | join(', ') }} (configured: {{ lidarr_container_http_port }})"
+          - "Lidarr instance name: {{ lidarr_status.json.instanceName }}"
+          - "Lidarr database: {{ lidarr_status.json.databaseType }} at {{ lidarr_verify_data_path }}/lidarr.db"
