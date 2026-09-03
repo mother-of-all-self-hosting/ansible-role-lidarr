@@ -262,18 +262,14 @@
     # the leaf literal in defaults/main.yml that Renovate edits, character for
     # character. `version` is Lidarr's own four-component version, which is that
     # same value with the rebuild counter removed.
-    - name: Assert the running Lidarr is the version the role pins
+    - name: Assert the running Lidarr is the version this role installs
       ansible.builtin.assert:
         that:
           - lidarr_status.json.packageVersion == lidarr_defaults.lidarr_version
           - lidarr_status.json.version == lidarr_defaults.lidarr_version.split('-')[0]
           - lidarr_container.Config.Labels['org.opencontainers.image.version'] == lidarr_defaults.lidarr_version
-        fail_msg: >-
-          The running Lidarr reports {{ lidarr_status.json.packageVersion }} while
-          defaults/main.yml pins {{ lidarr_defaults.lidarr_version }}
-        success_msg: >-
-          The running Lidarr reports {{ lidarr_status.json.packageVersion }},
-          the version defaults/main.yml pins
+        fail_msg: "Lidarr reports {{ lidarr_status.json.packageVersion | default('none') }}, expected {{ lidarr_defaults.lidarr_version }}"
+        success_msg: "Lidarr reports {{ lidarr_status.json.packageVersion }}"
 
     # The API key and the instance name both come from
     # `lidarr_environment_variables_additional_variables`. Lidarr generates a
