@@ -282,7 +282,7 @@
           - lidarr_status.status == 200
           - lidarr_status.json.instanceName == lidarr_molecule_instance_name
         fail_msg: >-
-          Lidarr calls itself {{ lidarr_status.json.instanceName | default('nothing') }} rather than
+          Lidarr calls itself {{ lidarr_status.json.instanceName | default('none') }} rather than
           {{ lidarr_molecule_instance_name }}, so lidarr_environment_variables_additional_variables
           does not reach the process
         success_msg: "Lidarr answered the role's API key and calls itself {{ lidarr_molecule_instance_name }}"
@@ -378,7 +378,7 @@
           - lidarr_control_json.apiKey != lidarr_molecule_api_key
           - lidarr_control_json.instanceName == 'Lidarr'
         fail_msg: >-
-          The stock Lidarr image produced {{ lidarr_control_initialize.stdout | default('nothing') }},
+          The stock Lidarr image produced {{ lidarr_control_initialize.stdout | default('none') }},
           which makes the assertions above unattributable to the role
         success_msg: >-
           The stock Lidarr image serves its own random API key and calls itself "Lidarr",
