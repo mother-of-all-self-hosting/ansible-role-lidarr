@@ -426,7 +426,7 @@
       ansible.builtin.debug:
         msg:
           - "Lidarr systemd: {{ lidarr_service.status.ActiveState }}"
-          - "Lidarr version: {{ lidarr_status.json.packageVersion }} (pinned: {{ lidarr_defaults.lidarr_version }})"
+          - "Lidarr version: {{ lidarr_status.json.packageVersion }}"
           - "Lidarr listening on: {{ lidarr_listening_ports | join(', ') }} (configured: {{ lidarr_container_http_port }})"
           - "Lidarr instance name: {{ lidarr_status.json.instanceName }}"
           - "Lidarr database: {{ lidarr_status.json.databaseType }} at {{ lidarr_verify_data_path }}/lidarr.db"
