@@ -44,13 +44,13 @@
         file: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') }}/defaults/main.yml"
         name: lidarr_defaults
 
-    - name: Read the Lidarr container the role created
+    - name: Inspect Lidarr container
       ansible.builtin.command:
         cmd: "docker container inspect {{ lidarr_verify_identifier }}"
       register: lidarr_container_raw
       changed_when: false
 
-    - name: Make sense of the Lidarr container
+    - name: Parse the Lidarr container definition
       ansible.builtin.set_fact:
         lidarr_container: "{{ (lidarr_container_raw.stdout | from_json)[0] }}"
 
