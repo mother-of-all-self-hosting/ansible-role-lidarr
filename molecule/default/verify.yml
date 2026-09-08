@@ -74,7 +74,7 @@
     - name: Run the Lidarr image with none of the role's configuration
       ansible.builtin.command:
         cmd: >-
-          docker run --detach --rm
+          docker run -d --rm
           --name {{ lidarr_verify_control_container }}
           {{ lidarr_container.Config.Image }}
       changed_when: true
