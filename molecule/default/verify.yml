@@ -83,7 +83,7 @@
     # The service the role installed
     # ------------------------------------------------------------------
 
-    - name: Wait for the Lidarr systemd service to become active
+    - name: Wait for the Lidarr systemd service to become active (up to 180s)
       ansible.builtin.systemd_service:
         name: "{{ lidarr_verify_identifier }}.service"
       register: lidarr_service
