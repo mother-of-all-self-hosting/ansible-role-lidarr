@@ -11,10 +11,6 @@
   gather_facts: false
 
   vars:
-    # The role's identifier is also the directory it installs into. These are
-    # role defaults, but Jinja-derived ones, and a verify play cannot resolve
-    # those out of defaults/main.yml - so they are spelled out here.
-    lidarr_verify_identifier: lidarr
     lidarr_verify_base_path: /lidarr
     lidarr_verify_data_path: /lidarr/data
 
@@ -48,7 +44,7 @@
 
         - name: Inspect Lidarr container
           ansible.builtin.command:
-            cmd: "docker container inspect {{ lidarr_verify_identifier }}"
+            cmd: docker container inspect lidarr
           register: lidarr_container_raw
           changed_when: false
 
@@ -87,7 +83,7 @@
 
         - name: Wait for the Lidarr systemd service to become active (up to 180s)
           ansible.builtin.systemd_service:
-            name: "{{ lidarr_verify_identifier }}.service"
+            name: lidarr.service
           register: lidarr_service
           until: lidarr_service.status.ActiveState == 'active'
           retries: 36
@@ -102,13 +98,13 @@
         - name: Assert the Lidarr systemd service is active
           ansible.builtin.assert:
             that: lidarr_service.status.ActiveState == 'active'
-            fail_msg: "{{ lidarr_verify_identifier }}.service is {{ lidarr_service.status.ActiveState }}"
-            success_msg: "{{ lidarr_verify_identifier }}.service is active"
+            fail_msg: "lidarr.service is {{ lidarr_service.status.ActiveState }}"
+            success_msg: "lidarr.service is active"
 
         - name: Retrieve the Lidarr systemd service log for debugging
           when: lidarr_debug_service_enabled | bool
           ansible.builtin.command:
-            cmd: "journalctl --no-pager --output=cat --unit={{ lidarr_verify_identifier }}.service"
+            cmd: journalctl --no-pager --output=cat --unit=lidarr.service
           changed_when: false
 
         # A published Docker port with nothing listening behind it resets the
@@ -149,7 +145,7 @@
         # still say 18686 while the process sat on 8686.
         - name: Read the ports Lidarr listens on
           ansible.builtin.command:
-            cmd: "docker exec {{ lidarr_verify_identifier }} netstat -lnt"
+            cmd: docker exec lidarr netstat -lnt
           register: lidarr_listening_raw
           changed_when: false
 
@@ -174,7 +170,7 @@
         # shared with no other timezone.
         - name: Read the timezone offset inside the Lidarr container
           ansible.builtin.command:
-            cmd: "docker exec {{ lidarr_verify_identifier }} date +%z"
+            cmd: docker exec lidarr date +%z
           register: lidarr_timezone
           changed_when: false
 
@@ -192,7 +188,7 @@
 
         - name: Read the user Lidarr runs as
           ansible.builtin.command:
-            cmd: "docker exec {{ lidarr_verify_identifier }} id -u"
+            cmd: docker exec lidarr id -u
           register: lidarr_container_uid
           changed_when: false
 
@@ -208,7 +204,7 @@
         - name: Read the additional volume from inside the Lidarr container
           ansible.builtin.command:
             cmd: >-
-              docker exec {{ lidarr_verify_identifier }}
+              docker exec lidarr
               cat {{ lidarr_molecule_extra_volume_dst }}/marker.txt
           register: lidarr_extra_volume
           changed_when: false
@@ -245,9 +241,9 @@
           vars:
             lidarr_labels_content: "{{ lidarr_labels_file.content | b64decode }}"
             lidarr_verify_expected_port_label: >-
-              traefik.http.services.{{ lidarr_verify_identifier }}.loadbalancer.server.port={{ lidarr_container_http_port }}
+              traefik.http.services.lidarr.loadbalancer.server.port={{ lidarr_container_http_port }}
             lidarr_verify_expected_basic_auth_label: >-
-              traefik.http.middlewares.{{ lidarr_verify_identifier }}-basic-auth.basicauth.users={{
+              traefik.http.middlewares.lidarr-basic-auth.basicauth.users={{
               lidarr_container_labels_traefik_middleware_basic_auth_users }}
 
         # ------------------------------------------------------------------
