@@ -31,6 +31,9 @@
     # search that discriminates, rather than a call returning whatever exists.
     lidarr_verify_absent_tag_label: molecule-never-created-tag
 
+    lidarr_verify_units:
+      - lidarr.service
+
   tasks:
     - name: Verify that Lidarr works
       block:
@@ -81,13 +84,14 @@
         # The service the role installed
         # ------------------------------------------------------------------
 
-        - name: Wait for the Lidarr systemd service to become active (up to 180s)
+        - name: Wait for the Lidarr systemd services to become active (up to 180s each)
           ansible.builtin.systemd_service:
-            name: lidarr.service
-          register: lidarr_service
-          until: lidarr_service.status.ActiveState == 'active'
+            name: "{{ item }}"
+          register: lidarr_services
+          until: lidarr_services.status.ActiveState == 'active'
           retries: 36
           delay: 5
+          loop: "{{ lidarr_verify_units }}"
           # So that giving up is reported by the assertion below rather than as a
           # wall of systemd unit properties.
           failed_when: false
@@ -95,17 +99,20 @@
         # `Restart=always` in the systemd unit means that even a container which crashes
         # and gets restarted reads as active here, so this is a precondition rather than
         # a result.
-        - name: Assert the Lidarr systemd service is active
+        - name: Assert the Lidarr systemd services are active
           ansible.builtin.assert:
-            that: lidarr_service.status.ActiveState == 'active'
-            fail_msg: "lidarr.service is {{ lidarr_service.status.ActiveState }}"
-            success_msg: "lidarr.service is active"
+            that: lidarr_services.results | map(attribute='status.ActiveState') | unique | list == ['active']
+            fail_msg: >-
+              Not every service is active:
+              {{ dict(lidarr_verify_units | zip(lidarr_services.results | map(attribute='status.ActiveState'))) }}
+            success_msg: "Every systemd service is active"
 
-        - name: Retrieve the Lidarr systemd service log for debugging
+        - name: Retrieve the Lidarr systemd services log for debugging
           when: lidarr_debug_service_enabled | bool
           ansible.builtin.command:
-            cmd: journalctl --no-pager --output=cat --unit=lidarr.service
+            cmd: "journalctl --no-pager --output=cat --unit={{ item }}"
           changed_when: false
+          loop: "{{ lidarr_verify_units }}"
 
         # A published Docker port with nothing listening behind it resets the
         # connection rather than refusing it, which `uri` reports as status -1, and
@@ -427,7 +434,7 @@
         - name: Show the Lidarr verification summary
           ansible.builtin.debug:
             msg:
-              - "Lidarr systemd: {{ lidarr_service.status.ActiveState }}"
+              - "Lidarr systemd: {% for unit, state in lidarr_verify_units | zip(lidarr_services.results | map(attribute='status.ActiveState')) %}{{ unit }} ({{ state }}){% if not loop.last %}, {% endif %}{% endfor %}"
               - "Lidarr version: {{ lidarr_status.json.packageVersion }}"
               - "Lidarr listening on: {{ lidarr_listening_ports | join(', ') }} (configured: {{ lidarr_container_http_port }})"
               - "Lidarr instance name: {{ lidarr_status.json.instanceName }}"
