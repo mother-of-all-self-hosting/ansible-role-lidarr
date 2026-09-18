@@ -134,6 +134,12 @@ lidarr_container_extra_arguments: "{{ lidarr_container_extra_arguments_auto + li
 lidarr_container_extra_arguments_auto: []
 lidarr_container_extra_arguments_custom: []
 
+# A list of extra arguments to pass to the process inside the container
+# Example: ['--SOME_ARGUMENT']
+lidarr_process_extra_arguments: "{{ lidarr_process_extra_arguments_auto + lidarr_process_extra_arguments_custom }}"
+lidarr_process_extra_arguments_auto: []
+lidarr_process_extra_arguments_custom: []
+
 # Specifies the value of the `X-XSS-Protection` header
 # Stops pages from loading when they detect reflected cross-site scripting (XSS) attacks.
 #
