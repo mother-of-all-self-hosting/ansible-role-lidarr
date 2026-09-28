@@ -34,13 +34,18 @@ provisioner:
         lidarr_restarts_check_enabled: true
 
         # The host directory mounted into the container through
-        # `lidarr_container_additional_volumes_custom`, and the file placed in
-        # it by prepare.yml. Reading that file from inside the container is what
-        # proves the additional volumes reach the systemd unit rather than being
-        # merely declared in defaults/main.yml.
+        # `lidarr_container_additional_volumes_custom`, and the file placed in it by
+        # prepare.yml. Reading that file from inside the container is what
+        # proves the additional volumes reach the systemd unit rather than
+        # being merely declared in defaults/main.yml.
         lidarr_molecule_extra_volume_src: /lidarr-molecule-extra
         lidarr_molecule_extra_volume_dst: /molecule-extra
-        lidarr_molecule_extra_volume_marker: lidarr-molecule-additional-volume-marker
+        lidarr_molecule_extra_volume_marker: only-a-real-bind-mount-can-read-this
+
+        # Files placed on the host under the paths the role bind-mounts. Lidarr
+        # itself is asked to list them back, so a mount that docker accepted but
+        # the process cannot see does not pass.
+        lidarr_molecule_marker_filename: lidarr-molecule-marker.txt
 
         # Nothing about Lidarr's own defaults can produce these. Lidarr's
         # built-in port is 8686, its instance name is "Lidarr" and its API key is
@@ -51,21 +56,25 @@ provisioner:
         lidarr_molecule_instance_name: MoleculeLidarrInstance
 
         # Variables for Lidarr
-        lidarr_uid: 1000
-        lidarr_gid: 1000
-        lidarr_scheme: http
+        #
+        # Deliberately not 1000: the linuxserver.io PUID/PGID pattern has left a
+        # needed directory unwritable in other roles of this fleet, and a uid
+        # that exists in the test image by accident would hide that.
+        lidarr_uid: 1717
+        lidarr_gid: 1717
+
         lidarr_hostname: localhost
 
-        # Deliberately not Lidarr's built-in 8686.
-        lidarr_container_http_port: 18686
-        lidarr_container_http_host_bind_port: "127.0.0.1:18686"
+        # A non-root path prefix exercises the strip-prefix and slashless
+        # redirect middlewares in templates/labels.j2.
+        lidarr_path_prefix: /lidarr-ui
 
-        # Deliberately not UTC, and an offset no other timezone shares.
-        lidarr_environment_variables_tz: Pacific/Chatham
+        # Bound to the loopback interface of the test container only. Nothing
+        # is published to the machine running Molecule, so two scenarios can
+        # run side by side without fighting over a port.
+        lidarr_container_http_host_bind_port: "127.0.0.1:9117"
 
-        lidarr_environment_variables_additional_variables: |
-          LIDARR__AUTH__APIKEY={{ lidarr_molecule_api_key }}
-          LIDARR__APP__INSTANCENAME={{ lidarr_molecule_instance_name }}
+        lidarr_container_http_port: 9117
 
         lidarr_container_additional_volumes_custom:
           - type: bind
@@ -73,13 +82,22 @@ provisioner:
             dst: "{{ lidarr_molecule_extra_volume_dst }}"
             options: readonly
 
-        # No Traefik runs here, but the labels the role renders are what a
-        # Traefik would route by, and the port in them has to agree with the
-        # port Lidarr was actually told to listen on.
-        # The doubled dollar signs are molecule's escape for a literal one.
         lidarr_container_labels_traefik_enabled: true
-        lidarr_container_labels_traefik_middleware_basic_auth_enabled: true
-        lidarr_container_labels_traefik_middleware_basic_auth_users: "molecule:$$apr1$$Molecul3$$7HkL338hjk6Taj6WhjfbB1"
+
+        lidarr_container_labels_additional_labels:
+          - mash.molecule.additional-label=set-by-the-role
+
+        lidarr_container_extra_arguments:
+          - "--label=mash.molecule.extra-argument=set-by-the-role"
+
+        # Neither the role's default of Etc/UTC nor the test host's zone, so
+        # that the timezone the container ends up in can only have come from
+        # templates/env.j2.
+        lidarr_environment_variables_tz: Asia/Tokyo
+
+        lidarr_environment_variables_additional_variables: |
+          LIDARR__AUTH__APIKEY={{ lidarr_molecule_api_key }}
+          LIDARR__APP__INSTANCENAME={{ lidarr_molecule_instance_name }}
   env:
     # Workaround for https://github.com/ansible/molecule/issues/4391
     ANSIBLE_ROLES_PATH: ${MOLECULE_PROJECT_DIRECTORY}/..:/.ansible/roles:/usr/share/ansible/roles:/etc/ansible/roles:~/.ansible/roles
