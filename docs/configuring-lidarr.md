@@ -61,16 +61,21 @@ After adjusting the hostname, make sure to adjust your DNS records to point the 
 > [!WARNING]
 > Lidarr ships without authentication and this role does not add any by default. A Lidarr installed as described above is reachable by anyone who knows the hostname, and it hands its API key to them: the unauthenticated `/initialize.json` endpoint contains it, and that key is enough to drive the whole API. Configure one of the two options below before pointing DNS at the server.
 
-The container image writes `<AuthenticationMethod>None</AuthenticationMethod>` into the configuration file Lidarr maintains for itself on first start, and Lidarr never asks you to create an account. Nothing in the installation process will warn you about this.
+The container image writes `<AuthenticationMethod>None</AuthenticationMethod>` into the configuration file Lidarr maintains for itself on first start, and Lidarr never asks you to create an account.
 
-The first option is to put HTTP Basic authentication in front of Lidarr, which is what the [Bazarr role](https://github.com/mother-of-all-self-hosting/ansible-role-bazarr) does by default. Add the following configuration to your `vars.yml` file, replacing the credentials with your own:
+#### Configuring HTTP Basic authentication
+
+The first option is to put HTTP Basic authentication in front of Lidarr. To do so, add the following configuration to your `vars.yml` file:
 
 ```yaml
 lidarr_container_labels_traefik_middleware_basic_auth_enabled: true
-lidarr_container_labels_traefik_middleware_basic_auth_users: "user:$apr1$Ha9SbG5X$RTPTAKfKhx3F5FzFHwLKF."
+
+lidarr_container_labels_traefik_middleware_basic_auth_users: 'USERNAME_HERE:HASHED_PASSWORD_HERE'
 ```
 
-The value is a `htpasswd`-formatted list of users, separated by commas. Generate one with `htpasswd -nb user password` (from the `apache2-utils` or `httpd-tools` package). If your `vars.yml` is processed by something that expands `$`, escape the dollar signs by doubling them.
+Make sure to replace `USERNAME_HERE` and `HASHED_PASSWORD_HERE` with your own values. You can create users by running `htpasswd -nb USERNAME_HERE PASSSWORD_HERE`.
+
+#### Enabling Lidarr's authentication
 
 The second option is to switch on Lidarr's own login, which is the better choice if you also reach Lidarr from a mobile app that cannot send Basic credentials. Lidarr reads these from the environment, so pass them through `lidarr_environment_variables_additional_variables`:
 
