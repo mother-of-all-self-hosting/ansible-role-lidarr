@@ -95,7 +95,7 @@ Take a look at:
 
 - [`defaults/main.yml`](../defaults/main.yml) for some variables that you can customize via your `vars.yml` file. You can override settings (even those that don't have dedicated playbook variables) using the `lidarr_environment_variables_additional_variables` variable
 
-Settings that Lidarr keeps in the configuration file it maintains for itself can be overridden through the environment, using `LIDARR__<SECTION>__<SETTING>` names — `LIDARR__SERVER__URLBASE`, `LIDARR__LOG__LEVEL` and so on. The role does this for the port already (`lidarr_container_http_port` is passed as `LIDARR__SERVER__PORT`), so `lidarr_container_http_port` really does move the port Lidarr listens on rather than only the port the reverse-proxy is told about.
+Refer to [this page](https://wiki.servarr.com/lidarr/environment-variables) for available options which can be set to `lidarr_environment_variables_additional_variables`.
 
 ## Installing
 
