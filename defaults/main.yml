@@ -18,7 +18,7 @@ lidarr_identifier: lidarr
 lidarr_base_path: "/{{ lidarr_identifier }}"
 lidarr_data_path: "{{ lidarr_base_path }}/data"
 
-# renovate: datasource=docker depName=linuxserver/lidarr
+# renovate: datasource=docker depName=ghcr.io/linuxserver/lidarr
 lidarr_version: 3.1.0.4875-ls36
 
 lidarr_uid: ""
@@ -38,7 +38,7 @@ lidarr_container_image: "{{ lidarr_container_image_registry_prefix }}linuxserver
 lidarr_container_image_tag: "{{ lidarr_version }}"
 lidarr_container_image_registry_prefix: "{{ lidarr_container_image_registry_prefix_upstream }}"
 lidarr_container_image_registry_prefix_upstream: "{{ lidarr_container_image_registry_prefix_upstream_default }}"
-lidarr_container_image_registry_prefix_upstream_default: docker.io/
+lidarr_container_image_registry_prefix_upstream_default: ghcr.io/
 
 # The base container network. It will be auto-created by this role if it doesn't exist already.
 lidarr_container_network: "{{ lidarr_identifier }}"

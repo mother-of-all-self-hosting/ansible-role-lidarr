@@ -58,7 +58,7 @@ scenario() {
 	cat > defaults/main.yml <<-'YAML'
 		# lidarr_version: 9.9.9.9999-ls99
 
-		# renovate: datasource=docker depName=linuxserver/lidarr
+		# renovate: datasource=docker depName=ghcr.io/linuxserver/lidarr
 		lidarr_version: 3.1.0.4875-ls36
 
 		lidarr_container_image: "{{ lidarr_container_image_registry_prefix }}linuxserver/lidarr:{{ lidarr_container_image_tag }}"
