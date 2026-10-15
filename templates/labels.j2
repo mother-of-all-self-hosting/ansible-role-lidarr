@@ -28,10 +28,10 @@ traefik.http.middlewares.{{ lidarr_identifier }}-slashless-redirect.redirectrege
 {% set middlewares = middlewares + [lidarr_identifier + '-slashless-redirect'] %}
 {% endif %}
 
-{% if lidarr_container_labels_traefik_path_prefix != '/' %}
-traefik.http.middlewares.{{ lidarr_identifier }}-strip-prefix.stripprefix.prefixes={{ lidarr_container_labels_traefik_path_prefix }}
-{% set middlewares = middlewares + [lidarr_identifier + '-strip-prefix'] %}
-{% endif %}
+{#
+  Intentionally not adding a stripPrefix middleware.
+  Lidarr serves itself under the prefix via LIDARR__SERVER__URLBASE (see `env.j2`).
+#}
 
 {% if lidarr_container_labels_traefik_additional_request_headers.keys() | length > 0 %}
 {% for name, value in lidarr_container_labels_traefik_additional_request_headers.items() %}

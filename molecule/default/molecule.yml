@@ -72,8 +72,8 @@ provisioner:
 
         lidarr_hostname: localhost
 
-        # A non-root path prefix exercises the strip-prefix and slashless
-        # redirect middlewares in templates/labels.j2.
+        # A non-root path prefix exercises the URL base (templates/env.j2) and
+        # the slashless redirect (templates/labels.j2).
         lidarr_path_prefix: /lidarr-ui
 
         # Bound to the loopback interface of the test container only. Nothing

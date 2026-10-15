@@ -56,6 +56,9 @@ lidarr_hostname: "example.com"
 
 After adjusting the hostname, make sure to adjust your DNS records to point the domain to your server.
 
+>[!NOTE]
+> The `lidarr_path_prefix` variable can be adjusted to host under a subpath (e.g. `lidarr_path_prefix: /lidarr`).
+
 ### Protecting the web interface
 
 > [!WARNING]

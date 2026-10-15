@@ -14,8 +14,9 @@
     lidarr_verify_base_path: /lidarr
     lidarr_verify_data_path: /lidarr/data
 
-    lidarr_verify_url: "http://{{ lidarr_hostname }}:{{ lidarr_container_http_port }}"
-    lidarr_verify_api_url: "http://{{ lidarr_hostname }}:{{ lidarr_container_http_port }}/api/v1"
+    # Lidarr serves itself under the configured path prefix.
+    lidarr_verify_url: "http://{{ lidarr_hostname }}:{{ lidarr_container_http_port }}{{ lidarr_expected_path_prefix }}"
+    lidarr_verify_api_url: "http://{{ lidarr_hostname }}:{{ lidarr_container_http_port }}{{ lidarr_expected_path_prefix }}/api/v1"
     lidarr_verify_headers:
       X-Api-Key: "{{ lidarr_molecule_api_key }}"
 
@@ -289,10 +290,34 @@
             that:
               - lidarr_container.Config.Labels['traefik.enable'] == 'true'
               - lidarr_container.Config.Labels['traefik.http.routers.lidarr.rule'] == 'Host(`' ~ lidarr_expected_hostname ~ '`) && PathPrefix(`' ~ lidarr_expected_path_prefix ~ '`)'
-              - lidarr_container.Config.Labels['traefik.http.middlewares.lidarr-strip-prefix.stripprefix.prefixes'] == lidarr_expected_path_prefix
+              - "'traefik.http.middlewares.lidarr-strip-prefix.stripprefix.prefixes' not in lidarr_container.Config.Labels"
               - lidarr_container.Config.Labels['traefik.http.services.lidarr.loadbalancer.server.port'] == '9117'
             fail_msg: "The Traefik labels are not what templates/labels.j2 should have produced: {{ lidarr_container.Config.Labels }}"
             success_msg: "The Traefik labels route {{ lidarr_expected_hostname }}{{ lidarr_expected_path_prefix }} to port 9117"
+
+        # Lidarr's web UI builds every asset and API URL from these, so they must
+        # carry the prefix Traefik routes on.
+        - name: Read the URL base Lidarr hands to its web UI
+          ansible.builtin.uri:
+            url: "{{ lidarr_verify_url }}/initialize.json"
+            method: GET
+            return_content: true
+            follow_redirects: none
+          register: lidarr_initialize
+          changed_when: false
+
+        - name: Assert that Lidarr serves itself under the configured path prefix
+          ansible.builtin.assert:
+            that:
+              - lidarr_initialize_json.urlBase == lidarr_expected_path_prefix
+              - lidarr_initialize_json.apiRoot == lidarr_expected_path_prefix ~ '/api/v1'
+            fail_msg: >-
+              Lidarr hands its web UI the URL base {{ lidarr_initialize_json.urlBase | default('none') }}
+              and the API root {{ lidarr_initialize_json.apiRoot | default('none') }},
+              not ones under {{ lidarr_expected_path_prefix }}
+            success_msg: "Lidarr serves its web UI and API under {{ lidarr_expected_path_prefix }}"
+          vars:
+            lidarr_initialize_json: "{{ lidarr_initialize.content | from_json }}"
 
         - name: Assert that the additional labels and extra arguments reached the container
           ansible.builtin.assert:
