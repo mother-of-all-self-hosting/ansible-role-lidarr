@@ -11,9 +11,9 @@
   ],
   "packageRules": [
     {
-      "description": "linuxserver.io tags are `<lidarr version>-ls<rebuild counter>`. Default `docker` versioning treats the counter as an incompatible flavour and finds nothing to update; this regex makes the counter the least significant component instead, and filters out the nightly/develop/architecture/bare-integer tags the repository also publishes.",
+      "description": "linuxserver.io tags are `<lidarr version>-ls<rebuild counter>`. Default `docker` versioning treats the counter as an incompatible flavour and finds nothing to update; this regex makes the counter the least significant component instead, and filters out the nightly/develop/architecture/bare-integer tags the repository also publishes. matchPackageNames has to follow the depName in defaults/main.yml: when the image moved to ghcr.io, this rule kept naming the docker.io package and silently stopped applying.",
       "matchDatasources": ["docker"],
-      "matchPackageNames": ["linuxserver/lidarr"],
+      "matchPackageNames": ["ghcr.io/linuxserver/lidarr"],
       "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\\.(?<build>\\d+)-ls(?<revision>\\d+)$"
     }
   ]
