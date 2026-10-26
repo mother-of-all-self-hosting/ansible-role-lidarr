@@ -19,7 +19,7 @@ lidarr_base_path: "/{{ lidarr_identifier }}"
 lidarr_data_path: "{{ lidarr_base_path }}/data"
 
 # renovate: datasource=docker depName=ghcr.io/linuxserver/lidarr
-lidarr_version: 3.1.0.4875-ls43
+lidarr_version: 3.1.6.5079-ls46
 
 lidarr_uid: ""
 lidarr_gid: ""
