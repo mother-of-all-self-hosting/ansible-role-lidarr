@@ -23,7 +23,7 @@ traefik.http.middlewares.{{ lidarr_identifier }}-basic-auth.basicauth.users={{ l
 {% endif %}
 
 {% if lidarr_container_labels_traefik_path_prefix != '/' %}
-traefik.http.middlewares.{{ lidarr_identifier }}-slashless-redirect.redirectregex.regex=^({{ lidarr_container_labels_traefik_path_prefix | quote }})$
+traefik.http.middlewares.{{ lidarr_identifier }}-slashless-redirect.redirectregex.regex=^(https?://[^/]+{{ lidarr_container_labels_traefik_path_prefix | regex_escape }})$
 traefik.http.middlewares.{{ lidarr_identifier }}-slashless-redirect.redirectregex.replacement=${1}/
 {% set middlewares = middlewares + [lidarr_identifier + '-slashless-redirect'] %}
 {% endif %}
