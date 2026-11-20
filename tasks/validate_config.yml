@@ -18,15 +18,11 @@
 - name: Fail if required Lidarr settings not defined
   ansible.builtin.fail:
     msg: >-
-      You need to define a required configuration setting (`{{ item.name }}`).
-  when: "item.when | bool and lookup('vars', item.name, default='') | string | length == 0"
+      You need to define a required configuration setting (`{{ item }}`).
+  when: "lookup('vars', item, default='') | string | length == 0"
   with_items:
-    - { "name": "lidarr_uid", when: true }
-    - { "name": "lidarr_gid", when: true }
-    - { "name": "lidarr_hostname", when: true }
-    - { "name": "lidarr_path_prefix", when: true }
-    - { "name": "lidarr_container_network", when: true }
-    - { "name": "lidarr_container_labels_traefik_middleware_basic_auth_users", when: "{{ lidarr_container_labels_traefik_middleware_basic_auth_enabled }}"}
+    - lidarr_uid
+    - lidarr_gid
 
 - name: Fail if Lidarr architecture is not supported
   ansible.builtin.fail:
@@ -41,11 +37,12 @@
     - name: Fail if Traefik settings required for Lidarr are not defined
       ansible.builtin.fail:
         msg: >-
-          You need to define a required configuration setting (`{{ item }}`).
-      when: "lookup('vars', item, default='') | string | length == 0"
+          You need to define a required configuration setting (`{{ item.name }}`).
+      when: "item.when | bool and lookup('vars', item.name, default='') | string | length == 0"
       with_items:
-        - lidarr_container_labels_traefik_hostname
-        - lidarr_container_labels_traefik_path_prefix
+        - { "name": "lidarr_container_labels_traefik_hostname", when: true }
+        - { "name": "lidarr_container_labels_traefik_path_prefix", when: true }
+        - { "name": "lidarr_container_labels_traefik_middleware_basic_auth_users", when: "{{ lidarr_container_labels_traefik_middleware_basic_auth_enabled }}" }
 
     # We ensure it doesn't end with a slash, because we handle both (slash and no-slash).
     # Knowing that `lidarr_container_labels_traefik_path_prefix` does not end with a slash
