@@ -66,6 +66,7 @@
               {{ lidarr_container_network }}
           register: lidarr_network_deletion_result
           changed_when: lidarr_container_network in lidarr_network_deletion_result.stdout
+          failed_when: lidarr_network_deletion_result.rc != 0 and 'not found' not in lidarr_network_deletion_result.stderr
 
 - name: Check existence of Lidarr local data path
   ansible.builtin.stat:
