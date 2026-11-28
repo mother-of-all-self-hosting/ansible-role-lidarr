@@ -80,6 +80,9 @@
     mode: "0644"
   register: lidarr_systemd_service_result
 
+- name: Determine whether Lidarr container is stale
+  ansible.builtin.include_tasks: "{{ role_path }}/tasks/util/determine_container_staleness.yml"
+
 - name: Determine whether Lidarr needs a restart
   ansible.builtin.set_fact:
     lidarr_restart_necessary: >-
@@ -88,4 +91,5 @@
         or lidarr_systemd_service_result.changed | default(false)
         or lidarr_container_image_pull_result_ansible_module.changed | default(false)
         or lidarr_container_image_pull_result_command.changed | default(false)
+        or lidarr_container_stale | bool
       }}
